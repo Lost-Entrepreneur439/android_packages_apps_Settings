@@ -90,6 +90,7 @@ public class SetupActionsFragment extends SettingsPreferenceFragment
         implements AdapterView.OnItemClickListener {
 
     private static final int RINGTONE_REQUEST_CODE = 1000;
+    private static final int NEW_TRIGGER_REQUEST_CODE = 1001;
 
     private static final int MENU_REMOVE = Menu.FIRST;
     private static final int MENU_FILL_PROFILE = Menu.FIRST + 1;
@@ -153,7 +154,9 @@ public class SetupActionsFragment extends SettingsPreferenceFragment
         mItems.add(new Header(getString(R.string.profile_triggers_header)));
         mItems.add(generateTriggerItem(TriggerItem.WIFI));
         mItems.add(generateTriggerItem(TriggerItem.BLUETOOTH));
-        mItems.add(generateTriggerItem(TriggerItem.NFC));
+        if (deviceSupportsNfc(getActivity())) {
+            mItems.add(generateTriggerItem(TriggerItem.NFC));
+        }
 
         // connection overrides
         mItems.add(new Header(getString(R.string.profile_connectionoverrides_title)));
@@ -342,10 +345,12 @@ public class SetupActionsFragment extends SettingsPreferenceFragment
                 // skipping this one
 
                 // nfc
-                NfcManager nfcManager = (NfcManager) getSystemService(Context.NFC_SERVICE);
-                mProfile.setConnectionSettings(
-                        new ConnectionSettings(ConnectionSettings.PROFILE_CONNECTION_NFC,
-                                nfcManager.getDefaultAdapter().isEnabled() ? 1 : 0, true));
+                if (deviceSupportsNfc(getActivity())) {
+                    NfcManager nfcManager = (NfcManager) getSystemService(Context.NFC_SERVICE);
+                    mProfile.setConnectionSettings(
+                            new ConnectionSettings(ConnectionSettings.PROFILE_CONNECTION_NFC,
+                                    nfcManager.getDefaultAdapter().isEnabled() ? 1 : 0, true));
+                }
 
                 // alarm volume
                 final AudioManager am = (AudioManager) getActivity()
@@ -531,6 +536,10 @@ public class SetupActionsFragment extends SettingsPreferenceFragment
     @Override
     public void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == NEW_TRIGGER_REQUEST_CODE) {
+            mProfile = mProfileManager.getProfile(mProfile.getUuid());
+            rebuildItemList();
+        }
     }
 
     private void requestRingModeDialog(final RingModeSettings setting) {
@@ -644,12 +653,7 @@ public class SetupActionsFragment extends SettingsPreferenceFragment
         override.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             @Override
             public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
-                streamSettings.setOverride(isChecked);
                 seekBar.setEnabled(isChecked);
-
-                mProfile.setStreamSettings(streamSettings);
-                mAdapter.notifyDataSetChanged();
-                updateProfile();
             }
         });
         seekBar.setEnabled(streamSettings.isOverride());
@@ -660,19 +664,14 @@ public class SetupActionsFragment extends SettingsPreferenceFragment
             @Override
             public void onClick(DialogInterface dialog, int which) {
                 int value = seekBar.getProgress();
+                streamSettings.setOverride(override.isChecked());
                 streamSettings.setValue(value);
                 mProfile.setStreamSettings(streamSettings);
                 mAdapter.notifyDataSetChanged();
                 updateProfile();
-                dialog.dismiss();
             }
         });
-        builder.setNegativeButton(android.R.string.cancel, new DialogInterface.OnClickListener() {
-            @Override
-            public void onClick(DialogInterface dialog, int which) {
-                dialog.dismiss();
-            }
-        });
+        builder.setNegativeButton(android.R.string.cancel, null);
         builder.show();
     }
 
@@ -767,6 +766,6 @@ public class SetupActionsFragment extends SettingsPreferenceFragment
 
         SubSettings pa = (SubSettings) getActivity();
         pa.startPreferencePanel(SetupTriggersFragment.class.getCanonicalName(), args,
-                R.string.profile_profile_manage, null, null, 0);
+                R.string.profile_profile_manage, null, this, NEW_TRIGGER_REQUEST_CODE);
     }
 }
